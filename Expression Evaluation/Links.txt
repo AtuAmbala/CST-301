@@ -1,0 +1,205 @@
+
+Expression Evaluaiton
+Atuhaire Ambala
+CST 301
+Prof Artzi
+Video: https://youtu.be/-cOsLka3Vks
+
+Code : 
+ ---------------------------------------------------------------------------------------------------
+ program infix_to_postfix
+    implicit none
+
+    ! Variable declarations
+    character(len=100) :: expression
+    character(len=1) :: token
+    integer :: i, value_stack_size, op_stack_size, postfix_size
+    integer, parameter :: max_size = 100
+    integer :: value_stack(max_size), op_stack(max_size)
+    character(len=1) :: op(max_size), postfix(max_size)
+    character(len=1) :: next_op
+    integer :: val1, val2, result
+
+    ! Read the input expression from the user
+    print *, "Enter an infix expression:"
+    read(*, '(A)') expression
+
+    ! Initialize stack sizes
+    value_stack_size = 0
+    op_stack_size = 0
+    postfix_size = 0
+
+    ! Process each character in the expression
+    do i = 1, len_trim(expression)
+        token = expression(i:i)  ! Get the current token
+
+        ! Determine the type of the token
+        select case (token)
+            case ('0':'9')
+                ! If token is a number, push it onto the value stack and postfix queue
+                call push_value(ichar(token) - ichar('0'), value_stack, value_stack_size)
+                call push_postfix(token, postfix, postfix_size)
+            case ('(')
+                ! If token is '(', push it onto the operator stack
+                call push_op(token, op, op_stack_size)
+            case (')')
+                ! If token is ')', pop from operator stack until '(' is found
+                do while (op_stack_size > 0 .and. op(op_stack_size) /= '(')
+                    call pop_op(next_op, op, op_stack_size)
+                    call pop_value(val2, value_stack, value_stack_size)
+                    call pop_value(val1, value_stack, value_stack_size)
+                    result = evaluate(val1, val2, next_op)
+                    call push_value(result, value_stack, value_stack_size)
+                    call push_postfix(next_op, postfix, postfix_size)
+                end do
+                ! Pop the '(' from the operator stack
+                call pop_op(next_op, op, op_stack_size)
+            case ('+', '-', '*', '/', '^')
+                ! If token is an operator, process operators with higher or equal precedence
+                do while (op_stack_size > 0 .and. precedence(op(op_stack_size)) >= precedence(token))
+                    call pop_op(next_op, op, op_stack_size)
+                    call pop_value(val2, value_stack, value_stack_size)
+                    call pop_value(val1, value_stack, value_stack_size)
+                    result = evaluate(val1, val2, next_op)
+                    call push_value(result, value_stack, value_stack_size)
+                    call push_postfix(next_op, postfix, postfix_size)
+                end do
+                ! Push the current operator onto the operator stack
+                call push_op(token, op, op_stack_size)
+            case default
+                ! Ignore other characters (like spaces)
+        end select
+    end do
+
+    ! Pop all remaining operators in the operator stack and process them
+    do while (op_stack_size > 0)
+        call pop_op(next_op, op, op_stack_size)
+        call pop_value(val2, value_stack, value_stack_size)
+        call pop_value(val1, value_stack, value_stack_size)
+        result = evaluate(val1, val2, next_op)
+        call push_value(result, value_stack, value_stack_size)
+        call push_postfix(next_op, postfix, postfix_size)
+    end do
+
+    ! Print the postfix notation
+    print *, "The postfix notation is:"
+    do i = 1, postfix_size
+        write(*, '(A)', advance='no') postfix(i)
+    end do
+    print *
+
+    ! The final result is the only value left in the value stack
+    if (value_stack_size == 1) then
+        print *, "The result is:", value_stack(1)
+    else
+        print *, "Error in expression evaluation"
+    end if
+
+contains
+
+    ! Subroutine to push a value onto the value stack
+    subroutine push_value(val, stack, size)
+        integer, intent(in) :: val
+        integer, intent(inout) :: stack(:)
+        integer, intent(inout) :: size
+        if (size < max_size) then
+            size = size + 1
+            stack(size) = val
+        else
+            print *, "Value stack overflow"
+        end if
+    end subroutine push_value
+
+    ! Subroutine to pop a value from the value stack
+    subroutine pop_value(val, stack, size)
+        integer, intent(out) :: val
+        integer, intent(inout) :: stack(:)
+        integer, intent(inout) :: size
+        if (size > 0) then
+            val = stack(size)
+            size = size - 1
+        else
+            print *, "Value stack underflow"
+        end if
+    end subroutine pop_value
+
+    ! Subroutine to push an operator onto the operator stack
+    subroutine push_op(opr, stack, size)
+        character(len=1), intent(in) :: opr
+        character(len=1), intent(inout) :: stack(:)
+        integer, intent(inout) :: size
+        if (size < max_size) then
+            size = size + 1
+            stack(size) = opr
+        else
+            print *, "Operator stack overflow"
+        end if
+    end subroutine push_op
+
+    ! Subroutine to pop an operator from the operator stack
+    subroutine pop_op(opr, stack, size)
+        character(len=1), intent(out) :: opr
+        character(len=1), intent(inout) :: stack(:)
+        integer, intent(inout) :: size
+        if (size > 0) then
+            opr = stack(size)
+            size = size - 1
+        else
+            print *, "Operator stack underflow"
+        end if
+    end subroutine pop_op
+
+    ! Subroutine to push a token onto the postfix queue
+    subroutine push_postfix(token, postfix, size)
+        character(len=1), intent(in) :: token
+        character(len=1), intent(inout) :: postfix(:)
+        integer, intent(inout) :: size
+        if (size < max_size) then
+            size = size + 1
+            postfix(size) = token
+        else
+            print *, "Postfix queue overflow"
+        end if
+    end subroutine push_postfix
+
+    ! Function to determine the precedence of an operator
+    function precedence(opr) result(p)
+        character(len=1), intent(in) :: opr
+        integer :: p
+        select case (opr)
+            case ('+', '-')
+                p = 1
+            case ('*', '/')
+                p = 2
+            case ('^')
+                p = 3
+            case default
+                p = 0
+        end select
+    end function precedence
+
+    ! Function to evaluate an expression with two operands and an operator
+    function evaluate(val1, val2, opr) result(res)
+        integer, intent(in) :: val1, val2
+        character(len=1), intent(in) :: opr
+        integer :: res
+        select case (opr)
+            case ('+')
+                res = val1 + val2
+            case ('-')
+                res = val1 - val2
+            case ('*')
+                res = val1 * val2
+            case ('/')
+                res = val1 / val2
+            case ('^')
+                res = val1 ** val2
+            case default
+                res = 0
+                print *, "Unknown operator"
+        end select
+    end function evaluate
+
+end program infix_to_postfix
+
+------------------------------------------------------------------------------------
